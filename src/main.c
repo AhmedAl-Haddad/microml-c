@@ -1,18 +1,22 @@
+
 #include "arena.h"
 #include "base.h"
 #include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <wincrypt.h>
+#include <stdio.h>
+#include <string.h>
+
+#define _CRT_SECURE_NO_WARNINGS
 
 typedef struct {
     u32 rows, cols;
     f32 *data;
 } matrix;
 
-matrix mat_create(u32 rows, u32 cols, mem_arena *arena);
+matrix* mat_create(u32 rows, u32 cols, mem_arena *arena);
+matrix* mat_load(mem_arena* arena, u32 rows, u32 cols, const char *filename);
 b32 mat_copy(matrix *dst, matrix *src);
 void mat_clear(matrix *mat);
 void mat_fill(matrix *mat, f32 val);
@@ -29,21 +33,136 @@ b32 mat_relu_add_grad(matrix *out, const matrix *in);
 b32 mat_softmax_add_grad(matrix *out, const matrix *softmax_out);
 b32 mat_cross_entropy_add_grad(matrix *out, const matrix *p, const matrix *q);
 
-int main() {
-    mem_arena *perm_arena = arena_create(GiB(1), MiB(1));
+typedef enum {
+    MV_FLAG_NONE = 0,
+    
+    MV_FLAG_REQUIRES_GRAD  = (1 << 0),
+    MV_FLAG_PARAMETER      = (1 << 1),
+    MV_FLAG_INPUT          = (1 << 2),
+    MV_FLAG_OUTPUT         = (1 << 3),
+    MV_FLAG_DESIRED_OUTPUT = (1 << 4),
+    MV_FLAG_COST           = (1 << 5),
+} model_var_flags;
 
-    arena_destroy(perm_arena);
+typedef enum {
+  MV_OP_NULL = 0,
+  MV_OP_CREATE,
 
+  _MV_OP_UNARY_START,
+
+  MV_OP_RELU,
+  MV_OP_SOFTMAX,
+
+  _MV_OP_BINARY_START,
+
+  MV_OP_ADD,
+  MV_OP_SUB,
+  MV_OP_MATMUL,
+  MV_OP_CROSS_ENTROPY,
+} model_var_ops;
+
+#define MODEL_VAR_MAX_INPUTS 2
+#define MV_NUM_INPUTS(op) ((op) < _MV_OP_BINARY_START ? 0 : ((op) < _MV_OP_UNARY_START ? 1 : 2))
+
+typedef struct model_var {
+  u32 index;
+  u32 flags;
+
+  matrix *val;
+  matrix *grad;
+
+  model_var_ops op;
+  struct model_var *inputs[MODEL_VAR_MAX_INPUTS];
+} model_var;
+
+typedef struct {
+  model_var **vars;
+  u32 size;
+} model_program;
+
+typedef struct {
+  u32 num_vars;
+
+  matrix *input;
+  matrix *output;
+  matrix *desired_output;
+  matrix *cost;
+
+  model_program forward_program;
+  model_program cost_program;
+} model_context;
+
+model_var *mv_create(
+  mem_arena *arena, model_context *model,
+  u32 rows, u32 cols, u32 flags
+);
+
+model_var *mv_relu(
+  mem_arena *arena, model_context *model,
+  model_var *input, u32 flags
+);
+
+model_var *mv_create(
+  mem_arena *arena, model_context *model,
+  u32 rows, u32 cols, u32 flags
+);
+
+model_var *mv_create(
+  mem_arena *arena, model_context *model,
+  u32 rows, u32 cols, u32 flags
+);
+
+model_var *mv_create(
+  mem_arena *arena, model_context *model,
+  u32 rows, u32 cols, u32 flags
+);
+
+void draw_mnist_digit(f32 *data);
+
+int main() { 
     return 0;
 }
 
-matrix mat_create(u32 rows, u32 cols, mem_arena *arena) {
+void draw_mnist_digit(f32 *data) {
+    for (u32 i = 0; i < 28; i++) {
+        for (u32 j = 0; j < 28; j++) {
+            f32 num = data[j + i * 28];
+            u32 col = 232 + (u32)(num * 24);
+            printf("\x1b[48;5;%dm  ", col);
+        }
+        printf("\n");
+    }
+    printf("\x1b[0m");    
+}
+
+matrix *mat_create(u32 rows, u32 cols, mem_arena *arena) {
     matrix *mat = PUSH_STRUCT(arena, matrix);
     mat->rows = rows;
     mat->cols = cols;
     mat->data = PUSH_ARRAY(arena, f32, (u64)rows * cols);
 
-    return *mat;
+    return mat;
+}
+
+matrix *mat_load(mem_arena *arena, u32 rows, u32 cols, const char *filename) {
+    matrix *mat = mat_create(rows, cols, arena);
+
+    FILE *f = fopen(filename, "rb");
+    if (!f) {
+        fprintf(stderr, "Failed to open %s\n", filename);
+        return NULL;
+    }
+    
+    fseek(f, 0, SEEK_END);
+    u64 size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    size = MIN(size, sizeof(f32) * rows * cols);
+    fread(mat->data, 1, size, f);
+    
+    fclose(f);
+    
+    return mat;
 }
 
 b32 mat_copy(matrix *dst, matrix *src) {

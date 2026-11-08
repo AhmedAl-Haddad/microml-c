@@ -1,3 +1,4 @@
+#define WIN32_LEAN_AND_MEAN
 #include "base.h"
 #include "platform.h"
 #include <windows.h>

@@ -32,7 +32,7 @@ mem_arena_temp arena_scratch_get(mem_arena **conflicts, u32 num_conflicts);
 void arena_scratch_release(mem_arena_temp temp);
 
 #define PUSH_STRUCT(arena, T) (T *)arena_push((arena), sizeof(T))
-#define PUSH_STRUCT_NZ(arena, T) (T *)arena_push((arena), sizeof(T), true)
-#define PUSH_ARRAY(arena, T, n) (T *)arena_push((arena), sizeof(T) * (n), false)
+#define PUSH_STRUCT_NZ(arena, T) (T *)arena_push((arena), sizeof(T))
+#define PUSH_ARRAY(arena, T, n) (T *)arena_push((arena), sizeof(T) * (n))
 #define PUSH_ARRAY_NZ(arena, T, n)                                             \
-    (T *)arena_push((arena), sizeof(T) * (n), true)
+    (T *)arena_push((arena), sizeof(T) * (n))
